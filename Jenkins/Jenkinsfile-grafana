@@ -1,0 +1,44 @@
+pipeline {
+  agent any
+  parameters {
+    string(name: 'projectName', defaultValue: 'psapp', description: 'Project name to create or target for update')
+  }
+
+  stages {
+    stage('Create project') {
+    steps {
+        sh """cd openshift
+oc login https://localhost:8443 --username developer --password developer --insecure-skip-tls-verify=true
+if ! oc project ${projectName}
+then
+  oc new-project ${projectName}
+fi"""
+      }
+    }
+    stage('Build add or update grafana configuration') {
+      steps {
+        sh """cd openshift
+oc login https://localhost:8443 --username developer --password developer --insecure-skip-tls-verify=true
+oc project ${projectName}
+oc apply -f grafana-imagestream.yaml
+oc apply -f grafana-build.yaml
+oc apply -f grafana-service.yaml
+oc apply -f grafana-route.yaml || echo 'Route already in place'"""
+        }
+    }
+    stage('Build grafana image') {
+      steps {
+        sh """oc login https://localhost:8443 --username developer --password developer --insecure-skip-tls-verify=true
+oc start-build grafana"""
+      }
+    }
+    stage('Deploy PetcClinic Container To Openshift') {
+      steps {
+        sh """cd openshift
+oc login https://localhost:8443 --username developer --password developer --insecure-skip-tls-verify=true
+oc project ${projectName}
+oc apply -f grafana-deploymentconfig.yaml"""
+      }
+    }
+  }
+}
